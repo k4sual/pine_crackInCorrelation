@@ -106,7 +106,7 @@ method stripPrefix(string sym) =>
     int colon = str.pos(sym, ":")
     colon != -1 ? str.substring(sym, colon + 1) : sym
 
-isDivergenceA(bool ignoreSwitch) =>
+isDivergenceA() =>
     smtOK = false
     zg.Pivot pvtK0 = na
     float pvtK0y   = na
@@ -154,7 +154,7 @@ isDivergenceA(bool ignoreSwitch) =>
                 break
     [smtOK, pvtK0, pvtK1, pvtZ]
 
-isDivergenceB(bool ignoreSwitch) =>
+isDivergenceB() =>
     smtOK = false
     zg.Pivot pvtK0 = na
     float pvtK0y   = na
@@ -202,8 +202,8 @@ isDivergenceB(bool ignoreSwitch) =>
                 break
     [smtOK, pvtK0, pvtK1, pvtZ]
 
-[isCurrentSMTA, pvtK0A, pvtK1A, pvtZA] = isDivergenceA(true)
-[isCurrentSMTB, pvtK0B, pvtK1B, pvtZB] = isDivergenceB(false)
+[isCurrentSMTA, pvtK0A, pvtK1A, pvtZA] = isDivergenceA()
+[isCurrentSMTB, pvtK0B, pvtK1B, pvtZB] = isDivergenceB()
 
 type smtLinkCalc
     chart.point anchorA
@@ -386,7 +386,7 @@ method checkInvalidation(array<smtLinkDraw> smtDrawArr, symbol) =>
             bP = smtD.data.anchorB.price
             topDot = math.sign(smtD.data.dir) == 1
             aPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorA.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
-            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
+            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorB.index]
             hS = request.security(symbol, timeframe.period, high)
             lS = request.security(symbol, timeframe.period, low)
             if ((smtD.data.dir == 1 and aP < bP and high > bP) or 
@@ -408,7 +408,7 @@ method checkValidation(array<smtLinkDraw> smtDrawArr, symbol) =>
             zP = smtD.data.anchorZ.price
             topDot = math.sign(smtD.data.dir) == 1
             aPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorA.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
-            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
+            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorB.index]
             zPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorZ.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorZ.index]
             hS = request.security(symbol, timeframe.period, high)
             lS = request.security(symbol, timeframe.period, low)
