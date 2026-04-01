@@ -1,0 +1,449 @@
+
+// This Pine Script® code is subject to the terms of the Mozilla Public License 2.0 at https://mozilla.org/MPL/2.0/
+// © k4sual
+
+//@version=6
+indicator('𝕜 | cracks in correlation (smt)', overlay = true, format = format.price, max_boxes_count = 500, max_labels_count = 500, max_lines_count = 500, max_bars_back = 5000)
+import Trendoscope/ZigzagLite/4 as zg
+
+const string visualG = 'Display ________________________________________________________'
+const string configG = 'Configuration ________________________________________________________'
+const string configSMTG = 'Configuration - SMT ________________________________________________________'
+
+type configSMT
+    int len
+
+    bool useSymbolA
+    string symbolA
+
+    bool useSymbolB
+    string symbolB
+
+type configGen
+    bool detectionShow
+    string sensitivity
+    int memoryBufferSize
+    bool deleteInvalidated
+
+type cssSMT
+    color uLink
+    color dLink
+    int linkW
+    string linkStyle
+
+    bool showLbl
+    color lblUclr
+    color lblDclr
+    string lblSize
+
+configGen cfgGenSMT = configGen.new(
+     input.bool(false, '↯ Show Detection', tooltip = 'This setting visualizes the process for detecting SMT divergences. It looks very cool in sped-up replay mode.', group = configG),
+     input.string('High', 'Sens.', ['Abysmal', 'Low', 'Med.', 'High', 'Insane'], tooltip = 'This script uses a ZigZag algorithm to detect SMTs. This setting changes the zigzag\'s sensitivity to new pivots.', group = configG),
+     input.int(12, 'Memory Buffer', minval = 6, maxval = 128, step = 2, group = configG),
+     input.bool(true, 'Hide invalidated SMTs', group = configG)
+     )
+     
+configSMT cfgSMT = configSMT.new(
+     10, // placeholder
+     input.bool(true, '', group = configSMTG, inline = 'symA', confirm = true),
+     input.symbol('CME_MINI:ES1!', '', group = configSMTG, inline = 'symA', confirm = true),
+     input.bool(false, '', group = configSMTG, inline = 'symB', confirm = true),
+     input.symbol('CBOT_MINI:YM1!', '', group = configSMTG, inline = 'symB', confirm = true)
+     )
+
+cssSMT cosSMT = cssSMT.new(
+     input.color(color.new(#8fadff, 50), 'Link —    ', group = visualG, inline = 'link'),
+     input.color(color.new(#ffffff, 50), '', group = visualG, inline = 'link'),
+     input.int(1, '', group = visualG, inline = 'link'),
+     input.string('solid', '', group = visualG, inline = 'link', options = ['solid', 'dashed', 'dotted']),
+
+     input.bool(true, 'Label', group = visualG, inline = 'lbl'),
+     input.color(color.new(#8fadff, 75), '', group = visualG, inline = 'lbl'),
+     input.color(color.new(#ffffff, 75), '', group = visualG, inline = 'lbl'),
+     input.string('tiny', '', group = visualG, inline = 'lbl', options = ['tiny', 'small', 'normal', 'large', 'huge'])
+     )
+
+sensLen = switch cfgGenSMT.sensitivity
+    'Abysmal' => 72
+    'Low' => 32
+    'Med.' => 12
+    'High' => 6
+    'Insane' => 2
+    => 10
+    
+
+var zg.Zigzag smtMainZZ = zg.Zigzag.new(sensLen, cfgGenSMT.memoryBufferSize)
+smtMainZZ.calculate()
+
+var polyline analysisPL = na
+var array<label> analysisDots = array.new<label>()
+
+smtPvtArray = smtMainZZ.zigzagPivots
+
+if cfgGenSMT.detectionShow
+    if array.size(analysisDots) > 0
+        for i = 0 to array.size(analysisDots) - 1
+            analysisDots.get(i).delete()
+        array.clear(analysisDots)
+
+    if array.size(smtPvtArray) > 0
+        for i = 0 to array.size(smtPvtArray) - 1
+            pvt = smtPvtArray.get(i)
+            pvtDir = pvt.dir
+
+            analysisDot = label.new(
+                 xloc = xloc.bar_index,
+                 x = pvt.point.index,
+                 y = pvt.point.price, 
+                 style = label.style_circle,
+                 text = str.tostring(i),
+                 size = size.tiny,
+                 color = math.sign(pvtDir) == 1 ? cosSMT.lblDclr : cosSMT.lblUclr)
+
+            array.push(analysisDots, analysisDot)
+    
+method stripPrefix(string sym) =>
+    int colon = str.pos(sym, ":")
+    colon != -1 ? str.substring(sym, colon + 1) : sym
+
+isDivergenceA() =>
+    smtOK = false
+    zg.Pivot pvtK0 = na
+    float pvtK0y   = na
+    zg.Pivot pvtK1 = na
+    float pvtK1y   = na
+    zg.Pivot pvtZ  = na
+    if cfgSMT.useSymbolA and smtPvtArray.size() >= 4
+        for i = 2 to smtPvtArray.size() - 1
+            indexSwitch = i % 2 == 0
+            pvtK0  := smtPvtArray.get(indexSwitch ? 0 : 1)
+            pvtK0y := pvtK0.point.price
+            pvtK1  := smtPvtArray.get(i)
+            pvtK1y := pvtK1.point.price
+
+            pvtZ   := smtPvtArray.get(indexSwitch ? 1 : 2)
+
+            float pvtA0y = na
+            float pvtA1y = na
+
+            if math.sign(pvtK0.dir) != math.sign(pvtK1.dir)
+                runtime.error('logic error: pivot directions dont match')
+            else if math.sign(pvtK0.dir) == 1
+                pvtA0y := request.security(cfgSMT.symbolA, timeframe.period, high)[bar_index - pvtK0.point.index]
+                pvtA1y := request.security(cfgSMT.symbolA, timeframe.period, high)[bar_index - pvtK1.point.index]
+            else if math.sign(pvtK0.dir) == -1
+                pvtA0y := request.security(cfgSMT.symbolA, timeframe.period, low)[bar_index - pvtK0.point.index]
+                pvtA1y := request.security(cfgSMT.symbolA, timeframe.period, low)[bar_index - pvtK1.point.index]
+
+            if not na(pvtA0y) and not na(pvtA1y)
+                if ((pvtK0y >= pvtK1y) and not (pvtA0y >= pvtA1y)) or ((pvtK0y <= pvtK1y) and not (pvtA0y <= pvtA1y))
+                    log.info('SMT@{0} x {1}:A', (indexSwitch ? 0 : 1), i)
+                    log.info('size: {0}', (i - (indexSwitch ? 0 : 1)) / 2)
+                    smtOK := true
+                    if not ((i - (indexSwitch ? 0 : 1)) / 2 <= 1)
+                        for j = (indexSwitch ? 0 : 1) + 2 to i -1 by 2
+                            pvtC = smtPvtArray.get(j)
+                            if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
+                                log.info('^invalidated at {0}', j)
+                                smtOK := false
+                                break
+                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.min(pvtK0y, pvtK1y))
+                                log.info('^invalidated at {0}', j)
+                                smtOK := false
+                                break
+            if smtOK
+                break
+    [smtOK, pvtK0, pvtK1, pvtZ]
+
+isDivergenceB() =>
+    smtOK = false
+    zg.Pivot pvtK0 = na
+    float pvtK0y   = na
+    zg.Pivot pvtK1 = na
+    float pvtK1y   = na
+    zg.Pivot pvtZ  = na
+    if cfgSMT.useSymbolB and smtPvtArray.size() >= 4
+        for i = 2 to smtPvtArray.size() - 1
+            indexSwitch = i % 2 == 0
+            pvtK0  := smtPvtArray.get(indexSwitch ? 0 : 1)
+            pvtK0y := pvtK0.point.price
+            pvtK1  := smtPvtArray.get(i)
+            pvtK1y := pvtK1.point.price
+
+            pvtZ   := smtPvtArray.get(indexSwitch ? 1 : 2)
+
+            float pvtB0y = na
+            float pvtB1y = na
+
+            if math.sign(pvtK0.dir) != math.sign(pvtK1.dir)
+                runtime.error('logic error: pivot directions dont match')
+            else if math.sign(pvtK0.dir) == 1
+                pvtB0y := request.security(cfgSMT.symbolB, timeframe.period, high)[bar_index - pvtK0.point.index]
+                pvtB1y := request.security(cfgSMT.symbolB, timeframe.period, high)[bar_index - pvtK1.point.index]
+            else if math.sign(pvtK0.dir) == -1
+                pvtB0y := request.security(cfgSMT.symbolB, timeframe.period, low)[bar_index - pvtK0.point.index]
+                pvtB1y := request.security(cfgSMT.symbolB, timeframe.period, low)[bar_index - pvtK1.point.index]
+
+            if not na(pvtB0y) and not na(pvtB1y)
+                if ((pvtK0y >= pvtK1y) and not (pvtB0y >= pvtB1y)) or ((pvtK0y <= pvtK1y) and not (pvtB0y <= pvtB1y))
+                    log.info('SMT@{0} x {1}:B', (indexSwitch ? 0 : 1), i)
+                    log.info('size: {0}', (i - (indexSwitch ? 0 : 1)) / 2)
+                    smtOK := true
+                    if not ((i - (indexSwitch ? 0 : 1)) / 2 <= 1)
+                        for j = (indexSwitch ? 0 : 1) + 2 to i -1 by 2
+                            pvtC = smtPvtArray.get(j)
+                            if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
+                                log.info('^invalidated at {0}', j)
+                                smtOK := false
+                                break
+                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.min(pvtK0y, pvtK1y))
+                                log.info('^invalidated at {0}', j)
+                                smtOK := false
+                                break
+            if smtOK
+                break
+    [smtOK, pvtK0, pvtK1, pvtZ]
+
+[isCurrentSMTA, pvtK0A, pvtK1A, pvtZA] = isDivergenceA()
+[isCurrentSMTB, pvtK0B, pvtK1B, pvtZB] = isDivergenceB()
+
+type smtLinkCalc
+    chart.point anchorA
+    chart.point anchorB
+    chart.point anchorZ
+    string symbol
+    float dir
+
+    bool invalidated
+    int invalidationIndex = na
+    bool validated
+    int validationIndex = na
+
+type confirmedArraySwitcher
+    array<smtLinkCalc> chart 
+    array<smtLinkCalc> other 
+
+varip smtRawArrA = array.new<smtLinkCalc>()
+varip smtRawArrB = array.new<smtLinkCalc>()
+varip smtConfirmedArrA = confirmedArraySwitcher.new(chart = array.new<smtLinkCalc>(), other = array.new<smtLinkCalc>())
+varip smtConfirmedArrB = confirmedArraySwitcher.new(chart = array.new<smtLinkCalc>(), other = array.new<smtLinkCalc>())
+
+calcSMT(isCurrentSMT, pvtK0, pvtK1, pvtZ, symbol, array<smtLinkCalc> smtRawArr) =>
+    if isCurrentSMT and bar_index > (last_bar_index - 2500) and not na(pvtK0) and not na(pvtK1)
+        anchorA = chart.point.new(0, pvtK0.point.index, pvtK0.point.price)
+        anchorB = chart.point.new(0, pvtK1.point.index, pvtK1.point.price)
+        anchorZ = chart.point.new(0, pvtZ.point.index, pvtZ.point.price)
+
+        smtRawArr.push(smtLinkCalc.new(anchorA, anchorB, anchorZ, symbol, math.sign(pvtK0.dir)))
+
+calcSMT(isCurrentSMTA, pvtK0A, pvtK1A, pvtZA, 'A', smtRawArrA)
+calcSMT(isCurrentSMTB, pvtK0B, pvtK1B, pvtZB, 'B', smtRawArrB)
+
+confirmSMT(array<smtLinkCalc> smtRawArr, confirmedArraySwitcher smtConfirmedArrSw) =>
+    if smtRawArr.size() > 0
+        rSmt = smtRawArr.last()
+        rAP = rSmt.anchorA.price
+        rBP = rSmt.anchorB.price
+        if ((smtConfirmedArrSw.chart.size() < 1) or (smtConfirmedArrSw.other.size() < 1))
+            if (rSmt.dir == 1 and rAP < rBP) or
+                 (rSmt.dir == -1 and rAP > rBP) and
+                 smtConfirmedArrSw.chart.size() < 1
+                smtConfirmedArrSw.chart.push(rSmt)
+            else if smtConfirmedArrSw.other.size() < 1
+                smtConfirmedArrSw.other.push(rSmt)
+            smtRawArr.clear()
+        else if smtRawArr.size() > 0
+            for smt in smtRawArr
+                aP = smt.anchorA.price
+                bP = smt.anchorB.price
+                lastConfirmedSMT = (smt.dir == 1 and aP < bP) or (smt.dir == -1 and aP > bP) ? smtConfirmedArrSw.chart.last() : smtConfirmedArrSw.other.last() 
+                if (smt.dir == 1 and aP < bP) or 
+                     (smt.dir == -1 and aP > bP)
+                    if smt.anchorB.index != lastConfirmedSMT.anchorB.index
+                        log.info('{0} != {1}', smt.anchorB.index, lastConfirmedSMT.anchorB.index)
+                        smtConfirmedArrSw.chart.push(smt)
+                    else
+                        smtConfirmedArrSw.chart.pop()
+                        smtConfirmedArrSw.chart.push(smt)
+                else
+                    if smt.anchorB.index != lastConfirmedSMT.anchorB.index
+                        log.info('{0} != {1}', smt.anchorB.index, lastConfirmedSMT.anchorB.index)
+                        smtConfirmedArrSw.other.push(smt)
+                    else
+                        smtConfirmedArrSw.other.pop()
+                        smtConfirmedArrSw.other.push(smt)
+            smtRawArr.clear()
+
+confirmSMT(smtRawArrA, smtConfirmedArrA)
+confirmSMT(smtRawArrB, smtConfirmedArrB)
+
+type smtLinkDraw
+    smtLinkCalc data
+    line link
+    label lbl
+    line linkInvalidation
+    line linkValidation
+
+var smtDrawArrA = array.new<smtLinkDraw>()
+var smtDrawArrB = array.new<smtLinkDraw>()
+
+if smtDrawArrA.size() > 0
+    for i = 0 to array.size(smtDrawArrA) - 1
+        smtDrawArrA.get(i).link.delete()
+        smtDrawArrA.get(i).lbl.delete()
+        smtDrawArrA.get(i).linkInvalidation.delete()
+    array.clear(smtDrawArrA)
+
+if smtDrawArrB.size() > 0
+    for i = 0 to array.size(smtDrawArrB) - 1
+        smtDrawArrB.get(i).link.delete()
+        smtDrawArrB.get(i).lbl.delete()
+        smtDrawArrB.get(i).linkInvalidation.delete()
+    array.clear(smtDrawArrB)
+
+drawSMT(smtLinkCalc linkCalc) =>
+    if not na(linkCalc)
+        string style = switch cosSMT.linkStyle
+            'solid' => line.style_solid
+            'dashed' => line.style_dashed
+            'dotted' => line.style_dotted
+            => line.style_solid
+
+        string size = switch cosSMT.lblSize
+            'tiny' => size.tiny
+            'small' => size.small
+            'normal' => size.normal
+            'large' => size.large
+            'huge' => size.large
+            => size.tiny
+
+        string labelText = na
+
+        if linkCalc.dir == 1
+            labelText := linkCalc.symbol == 'A' ? cfgSMT.symbolA.stripPrefix() : linkCalc.symbol == 'B' ? cfgSMT.symbolB.stripPrefix() + '\n' : ''
+        else if linkCalc.dir == -1
+            labelText := linkCalc.symbol == 'A' ? cfgSMT.symbolA.stripPrefix() : linkCalc.symbol == 'B' ? '\n' + cfgSMT.symbolB.stripPrefix() : ''
+
+        link = line.new(
+            chart.point.from_index(linkCalc.anchorA.index, linkCalc.anchorA.price + (math.sign(linkCalc.dir) == 1 ? syminfo.mintick * 5 : syminfo.mintick * -5)),
+            chart.point.from_index(linkCalc.anchorB.index, linkCalc.anchorB.price + (math.sign(linkCalc.dir) == 1 ? syminfo.mintick * 5 : syminfo.mintick * -5)),
+            color = linkCalc.invalidated ? cfgGenSMT.deleteInvalidated ? color.new(color.black, 100) : color.new(color.red, 50) : linkCalc.dir == 1 ? cosSMT.uLink : cosSMT.dLink,
+            width = cosSMT.linkW,
+            style = style)
+
+        aP = linkCalc.anchorA.price
+        bP = linkCalc.anchorB.price
+        zP = linkCalc.anchorZ.price
+
+        invalidated = linkCalc.invalidated
+
+        line linkInvalidation = na
+        if (linkCalc.dir == 1 and aP < bP) or 
+             (linkCalc.dir == -1 and aP > bP)
+            linkInvalidation := line.new(
+                linkCalc.anchorB,
+                chart.point.from_index(invalidated ? linkCalc.invalidationIndex : linkCalc.anchorA.index + 2, linkCalc.anchorB.price),
+                color = cfgGenSMT.deleteInvalidated ? color.new(color.black, 100) : color.new(color.gray, 50),
+                width = cosSMT.linkW,
+                style = line.style_dashed
+            )
+
+        line linkValidation = na
+        if (linkCalc.dir == 1 and aP < bP) or
+             (linkCalc.dir == -1 and aP > bP)
+            linkValidation := line.new(
+                linkCalc.anchorZ,
+                chart.point.from_index(linkCalc.anchorA.index + 2, linkCalc.anchorZ.price),
+                color = cfgGenSMT.deleteInvalidated ? color.new(color.black, 100): color.new(color.white, 50),
+                width = cosSMT.linkW,
+                style = line.style_dashed
+            )
+            
+        lbl = label.new(
+            chart.point.new(0, (linkCalc.anchorA.index + linkCalc.anchorB.index) / 2, (linkCalc.anchorA.price + linkCalc.anchorB.price) / 2),
+            text = labelText,
+            color = color.new(color.black, 100),
+            textcolor = (cfgGenSMT.deleteInvalidated and linkCalc.invalidated) ? color.new(color.black, 100) : linkCalc.dir == 1 ? color.new(cosSMT.lblUclr, 10) : color.new(cosSMT.lblDclr, 10),
+            style = linkCalc.dir == 1 ? label.style_label_down : label.style_label_up,
+            size = size,
+            text_font_family = font.family_monospace
+        )
+
+        smtLinkDraw.new(linkCalc, link, lbl, linkInvalidation)
+
+
+// log.info('smtConfirmedArrA.size() = {0} and {1}', smtConfirmedArrA.chart.size(), smtConfirmedArrA.other.size())
+// log.info('smtRawArrA.size() = {0}', smtRawArrA.size())
+// log.info('smtConfirmedArrB.size() = {0} and {1}', smtConfirmedArrB.chart.size(), smtConfirmedArrB.other.size())
+// log.info('smtRawArrB.size() = {0}', smtRawArrB.size())
+
+method priceHit(float this, float hi, float lo) =>
+    (hi >= this and lo <= this)
+
+method checkInvalidation(array<smtLinkDraw> smtDrawArr, symbol) =>
+    if smtDrawArr.size() > 0
+        for smtD in smtDrawArr
+            aP = smtD.data.anchorA.price
+            bP = smtD.data.anchorB.price
+            topDot = math.sign(smtD.data.dir) == 1
+            aPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorA.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
+            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorB.index]
+            hS = request.security(symbol, timeframe.period, high)
+            lS = request.security(symbol, timeframe.period, low)
+            if ((smtD.data.dir == 1 and aP < bP and high > bP) or 
+                 (smtD.data.dir == -1 and aP > bP and low < bP)) and not (smtD.data.invalidated or smtD.data.validated)
+                log.info('smt invalidation')
+                smtD.data.invalidated := true
+                smtD.data.invalidationIndex := bar_index
+                true
+            else if ((smtD.data.dir == 1 and aPS < bPS and hS > bPS) or
+                 (smtD.data.dir == -1 and aPS > bPS and lS < bPS)) and not (smtD.data.invalidated or smtD.data.validated)
+                log.info('smt invalidation')
+                smtD.data.invalidated := true
+
+method checkValidation(array<smtLinkDraw> smtDrawArr, symbol) =>
+    if smtDrawArr.size() >0
+        for smtD in smtDrawArr
+            aP = smtD.data.anchorA.price
+            bP = smtD.data.anchorB.price
+            zP = smtD.data.anchorZ.price
+            topDot = math.sign(smtD.data.dir) == 1
+            aPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorA.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
+            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorB.index]
+            zPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorZ.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorZ.index]
+            hS = request.security(symbol, timeframe.period, high)
+            lS = request.security(symbol, timeframe.period, low)
+            cS = request.security(symbol, timeframe.period, close)
+            if ((smtD.data.dir == 1 and aP < bP and close < zP) or
+                (smtD.data.dir == -1 and aP > bP and close > zP)) and not (smtD.data.invalidated or smtD.data.validated)
+                log.info('smt validated')
+                smtD.data.validated := true
+                smtD.data.validationIndex := bar_index
+                true
+            else if ((smtD.data.dir == 1 and aPS < bPS and cS < zPS) or 
+                (smtD.data.dir == -1 and aPS > bPS and cS > zPS)) and not (smtD.data.invalidated or smtD.data.validated)
+                log.info('smt validated')
+                smtD.data.validated := true
+            
+if smtConfirmedArrA.chart.size() > 0
+    for i = 0 to smtConfirmedArrA.chart.size() -1
+        smtDrawArrA.push(drawSMT(smtConfirmedArrA.chart.get(i)))
+if smtConfirmedArrA.other.size() > 0
+    for i = 0 to smtConfirmedArrA.other.size() -1
+        smtDrawArrA.push(drawSMT(smtConfirmedArrA.other.get(i)))
+
+if smtConfirmedArrB.chart.size() > 0
+    for i = 0 to smtConfirmedArrB.chart.size() -1
+        smtDrawArrB.push(drawSMT(smtConfirmedArrB.chart.get(i)))
+if smtConfirmedArrB.other.size() > 0
+    for i = 0 to smtConfirmedArrB.other.size() -1
+        smtDrawArrB.push(drawSMT(smtConfirmedArrB.other.get(i)))
+
+smtDrawArrA.checkInvalidation(cfgSMT.symbolA)
+smtDrawArrA.checkValidation(cfgSMT.symbolA)
+smtDrawArrB.checkInvalidation(cfgSMT.symbolB)
+smtDrawArrB.checkValidation(cfgSMT.symbolB)
+            
+
+
+
