@@ -106,7 +106,7 @@ method stripPrefix(string sym) =>
     int colon = str.pos(sym, ":")
     colon != -1 ? str.substring(sym, colon + 1) : sym
 
-isDivergenceA() =>
+isDivergenceA(bool ignoreSwitch) =>
     smtOK = false
     zg.Pivot pvtK0 = na
     float pvtK0y   = na
@@ -114,14 +114,13 @@ isDivergenceA() =>
     float pvtK1y   = na
     zg.Pivot pvtZ  = na
     if cfgSMT.useSymbolA and smtPvtArray.size() >= 4
-        for i = 2 to smtPvtArray.size() - 1
-            indexSwitch = i % 2 == 0
-            pvtK0  := smtPvtArray.get(indexSwitch ? 0 : 1)
+        for i = 2 to smtPvtArray.size() - 1 by 2
+            pvtK0  := smtPvtArray.first()
             pvtK0y := pvtK0.point.price
             pvtK1  := smtPvtArray.get(i)
             pvtK1y := pvtK1.point.price
 
-            pvtZ   := smtPvtArray.get(indexSwitch ? 1 : 2)
+            pvtZ   := smtPvtArray.get(1)
 
             float pvtA0y = na
             float pvtA1y = na
@@ -137,11 +136,11 @@ isDivergenceA() =>
 
             if not na(pvtA0y) and not na(pvtA1y)
                 if ((pvtK0y >= pvtK1y) and not (pvtA0y >= pvtA1y)) or ((pvtK0y <= pvtK1y) and not (pvtA0y <= pvtA1y))
-                    log.info('SMT@{0} x {1}:A', (indexSwitch ? 0 : 1), i)
-                    log.info('size: {0}', (i - (indexSwitch ? 0 : 1)) / 2)
+                    log.info('SMT@{0} x {1}:A', 0, i)
+                    log.info('size: {0}', i / 2)
                     smtOK := true
-                    if not ((i - (indexSwitch ? 0 : 1)) / 2 <= 1)
-                        for j = (indexSwitch ? 0 : 1) + 2 to i -1 by 2
+                    if not (i / 2 <= 1)
+                        for j = 2 to i -1 by 2
                             pvtC = smtPvtArray.get(j)
                             if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
                                 log.info('^invalidated at {0}', j)
@@ -155,7 +154,7 @@ isDivergenceA() =>
                 break
     [smtOK, pvtK0, pvtK1, pvtZ]
 
-isDivergenceB() =>
+isDivergenceB(bool ignoreSwitch) =>
     smtOK = false
     zg.Pivot pvtK0 = na
     float pvtK0y   = na
@@ -163,14 +162,13 @@ isDivergenceB() =>
     float pvtK1y   = na
     zg.Pivot pvtZ  = na
     if cfgSMT.useSymbolB and smtPvtArray.size() >= 4
-        for i = 2 to smtPvtArray.size() - 1
-            indexSwitch = i % 2 == 0
-            pvtK0  := smtPvtArray.get(indexSwitch ? 0 : 1)
+        for i = 2 to smtPvtArray.size() - 1 by 2
+            pvtK0  := smtPvtArray.first()
             pvtK0y := pvtK0.point.price
             pvtK1  := smtPvtArray.get(i)
             pvtK1y := pvtK1.point.price
 
-            pvtZ   := smtPvtArray.get(indexSwitch ? 1 : 2)
+            pvtZ   := smtPvtArray.get(1)
 
             float pvtB0y = na
             float pvtB1y = na
@@ -186,11 +184,11 @@ isDivergenceB() =>
 
             if not na(pvtB0y) and not na(pvtB1y)
                 if ((pvtK0y >= pvtK1y) and not (pvtB0y >= pvtB1y)) or ((pvtK0y <= pvtK1y) and not (pvtB0y <= pvtB1y))
-                    log.info('SMT@{0} x {1}:B', (indexSwitch ? 0 : 1), i)
-                    log.info('size: {0}', (i - (indexSwitch ? 0 : 1)) / 2)
+                    log.info('SMT@{0} x {1}:B', 0, i)
+                    log.info('size: {0}', i / 2)
                     smtOK := true
-                    if not ((i - (indexSwitch ? 0 : 1)) / 2 <= 1)
-                        for j = (indexSwitch ? 0 : 1) + 2 to i -1 by 2
+                    if not (i / 2 <= 1)
+                        for j = 2 to i -1 by 2
                             pvtC = smtPvtArray.get(j)
                             if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
                                 log.info('^invalidated at {0}', j)
@@ -204,8 +202,8 @@ isDivergenceB() =>
                 break
     [smtOK, pvtK0, pvtK1, pvtZ]
 
-[isCurrentSMTA, pvtK0A, pvtK1A, pvtZA] = isDivergenceA()
-[isCurrentSMTB, pvtK0B, pvtK1B, pvtZB] = isDivergenceB()
+[isCurrentSMTA, pvtK0A, pvtK1A, pvtZA] = isDivergenceA(true)
+[isCurrentSMTB, pvtK0B, pvtK1B, pvtZB] = isDivergenceB(false)
 
 type smtLinkCalc
     chart.point anchorA
@@ -325,8 +323,8 @@ drawSMT(smtLinkCalc linkCalc) =>
             labelText := linkCalc.symbol == 'A' ? cfgSMT.symbolA.stripPrefix() : linkCalc.symbol == 'B' ? '\n' + cfgSMT.symbolB.stripPrefix() : ''
 
         link = line.new(
-            chart.point.from_index(linkCalc.anchorA.index, linkCalc.anchorA.price + (math.sign(linkCalc.dir) == 1 ? syminfo.mintick * 5 : syminfo.mintick * -5)),
-            chart.point.from_index(linkCalc.anchorB.index, linkCalc.anchorB.price + (math.sign(linkCalc.dir) == 1 ? syminfo.mintick * 5 : syminfo.mintick * -5)),
+            chart.point.from_index(linkCalc.anchorA.index, linkCalc.anchorA.price + syminfo.mintick * 5 * math.sign(linkCalc.dir)),
+            chart.point.from_index(linkCalc.anchorB.index, linkCalc.anchorB.price + syminfo.mintick * 5 * math.sign(linkCalc.dir)),
             color = linkCalc.invalidated ? cfgGenSMT.deleteInvalidated ? color.new(color.black, 100) : color.new(color.red, 50) : linkCalc.dir == 1 ? cosSMT.uLink : cosSMT.dLink,
             width = cosSMT.linkW,
             style = style)
@@ -343,9 +341,9 @@ drawSMT(smtLinkCalc linkCalc) =>
             linkInvalidation := line.new(
                 linkCalc.anchorB,
                 chart.point.from_index(invalidated ? linkCalc.invalidationIndex : linkCalc.anchorA.index + 2, linkCalc.anchorB.price),
-                color = cfgGenSMT.deleteInvalidated ? color.new(color.black, 100) : color.new(color.gray, 50),
+                color = cfgGenSMT.deleteInvalidated ? color.new(color.black, 100) : color.new(color.gray, 25),
                 width = cosSMT.linkW,
-                style = line.style_dashed
+                style = line.style_dotted
             )
 
         line linkValidation = na
@@ -354,13 +352,14 @@ drawSMT(smtLinkCalc linkCalc) =>
             linkValidation := line.new(
                 linkCalc.anchorZ,
                 chart.point.from_index(linkCalc.anchorA.index + 2, linkCalc.anchorZ.price),
-                color = cfgGenSMT.deleteInvalidated ? color.new(color.black, 100): color.new(color.white, 50),
+                color = cfgGenSMT.deleteInvalidated ? color.new(color.black, 100): color.new(color.white, 25),
                 width = cosSMT.linkW,
-                style = line.style_dashed
+                style = line.style_dotted
             )
             
+        lblChartPoint = chart.point.from_index((linkCalc.anchorA.index + linkCalc.anchorB.index) / 2, ((linkCalc.anchorA.price + linkCalc.anchorB.price) / 2 + syminfo.mintick * 5 * math.sign(linkCalc.dir)))
         lbl = label.new(
-            chart.point.new(0, (linkCalc.anchorA.index + linkCalc.anchorB.index) / 2, (linkCalc.anchorA.price + linkCalc.anchorB.price) / 2),
+            lblChartPoint,
             text = labelText,
             color = color.new(color.black, 100),
             textcolor = (cfgGenSMT.deleteInvalidated and linkCalc.invalidated) ? color.new(color.black, 100) : linkCalc.dir == 1 ? color.new(cosSMT.lblUclr, 10) : color.new(cosSMT.lblDclr, 10),
@@ -387,7 +386,7 @@ method checkInvalidation(array<smtLinkDraw> smtDrawArr, symbol) =>
             bP = smtD.data.anchorB.price
             topDot = math.sign(smtD.data.dir) == 1
             aPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorA.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
-            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorB.index]
+            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
             hS = request.security(symbol, timeframe.period, high)
             lS = request.security(symbol, timeframe.period, low)
             if ((smtD.data.dir == 1 and aP < bP and high > bP) or 
@@ -409,7 +408,7 @@ method checkValidation(array<smtLinkDraw> smtDrawArr, symbol) =>
             zP = smtD.data.anchorZ.price
             topDot = math.sign(smtD.data.dir) == 1
             aPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorA.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
-            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorB.index]
+            bPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorB.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorA.index]
             zPS = topDot ? request.security(symbol, timeframe.period, high)[bar_index - smtD.data.anchorZ.index] : request.security(symbol, timeframe.period, low)[bar_index - smtD.data.anchorZ.index]
             hS = request.security(symbol, timeframe.period, high)
             lS = request.security(symbol, timeframe.period, low)
