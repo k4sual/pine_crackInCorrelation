@@ -139,14 +139,15 @@ isDivergenceA() =>
                     log.info('SMT@{0} x {1}:A', 0, i)
                     log.info('size: {0}', i / 2)
                     smtOK := true
-                    if not (i / 2 <= 1)
+                    if (i > 2)
+                        log.info('checking invl')
                         for j = 2 to i -1 by 2
                             pvtC = smtPvtArray.get(j)
                             if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
-                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.min(pvtK0y, pvtK1y))
+                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.max(pvtK0y, pvtK1y))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
@@ -187,14 +188,14 @@ isDivergenceB() =>
                     log.info('SMT@{0} x {1}:B', 0, i)
                     log.info('size: {0}', i / 2)
                     smtOK := true
-                    if not (i / 2 <= 1)
+                    if (i > 2)
                         for j = 2 to i -1 by 2
                             pvtC = smtPvtArray.get(j)
                             if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
-                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.min(pvtK0y, pvtK1y))
+                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.max(pvtK0y, pvtK1y))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
@@ -443,6 +444,3 @@ smtDrawArrA.checkValidation(cfgSMT.symbolA)
 smtDrawArrB.checkInvalidation(cfgSMT.symbolB)
 smtDrawArrB.checkValidation(cfgSMT.symbolB)
             
-
-
-
