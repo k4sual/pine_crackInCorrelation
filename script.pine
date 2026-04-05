@@ -108,34 +108,34 @@ method stripPrefix(string sym) =>
 
 isDivergenceA() =>
     smtOK = false
-    zg.Pivot pvtK0 = na
-    float pvtK0y   = na
-    zg.Pivot pvtK1 = na
-    float pvtK1y   = na
-    zg.Pivot pvtZ  = na
+    zg.Pivot pvtNewest = na
+    float pvtNewestY   = na
+    zg.Pivot pvtOlder  = na
+    float pvtOlderY    = na
+    zg.Pivot pvtIntermediate = na
     if cfgSMT.useSymbolA and smtPvtArray.size() >= 4
         for i = 2 to smtPvtArray.size() - 1 by 2
-            pvtK0  := smtPvtArray.first()
-            pvtK0y := pvtK0.point.price
-            pvtK1  := smtPvtArray.get(i)
-            pvtK1y := pvtK1.point.price
+            pvtNewest  := smtPvtArray.first()
+            pvtNewestY := pvtNewest.point.price
+            pvtOlder   := smtPvtArray.get(i)
+            pvtOlderY  := pvtOlder.point.price
 
-            pvtZ   := smtPvtArray.get(1)
+            pvtIntermediate := smtPvtArray.get(1)
 
             float pvtA0y = na
             float pvtA1y = na
 
-            if math.sign(pvtK0.dir) != math.sign(pvtK1.dir)
+            if math.sign(pvtNewest.dir) != math.sign(pvtOlder.dir)
                 runtime.error('logic error: pivot directions dont match')
-            else if math.sign(pvtK0.dir) == 1
-                pvtA0y := request.security(cfgSMT.symbolA, timeframe.period, high)[bar_index - pvtK0.point.index]
-                pvtA1y := request.security(cfgSMT.symbolA, timeframe.period, high)[bar_index - pvtK1.point.index]
-            else if math.sign(pvtK0.dir) == -1
-                pvtA0y := request.security(cfgSMT.symbolA, timeframe.period, low)[bar_index - pvtK0.point.index]
-                pvtA1y := request.security(cfgSMT.symbolA, timeframe.period, low)[bar_index - pvtK1.point.index]
+            else if math.sign(pvtNewest.dir) == 1
+                pvtA0y := request.security(cfgSMT.symbolA, timeframe.period, high)[bar_index - pvtNewest.point.index]
+                pvtA1y := request.security(cfgSMT.symbolA, timeframe.period, high)[bar_index - pvtOlder.point.index]
+            else if math.sign(pvtNewest.dir) == -1
+                pvtA0y := request.security(cfgSMT.symbolA, timeframe.period, low)[bar_index - pvtNewest.point.index]
+                pvtA1y := request.security(cfgSMT.symbolA, timeframe.period, low)[bar_index - pvtOlder.point.index]
 
             if not na(pvtA0y) and not na(pvtA1y)
-                if ((pvtK0y >= pvtK1y) and not (pvtA0y >= pvtA1y)) or ((pvtK0y <= pvtK1y) and not (pvtA0y <= pvtA1y))
+                if ((pvtNewestY >= pvtOlderY) and not (pvtA0y >= pvtA1y)) or ((pvtNewestY <= pvtOlderY) and not (pvtA0y <= pvtA1y))
                     log.info('SMT@{0} x {1}:A', 0, i)
                     log.info('size: {0}', i / 2)
                     smtOK := true
@@ -143,68 +143,68 @@ isDivergenceA() =>
                         log.info('checking invl')
                         for j = 2 to i -1 by 2
                             pvtC = smtPvtArray.get(j)
-                            if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
+                            if math.sign(pvtNewest.dir) == 1 and (pvtC.point.price > math.min(pvtNewestY, pvtOlderY))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
-                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.max(pvtK0y, pvtK1y))
+                            else if math.sign(pvtNewest.dir) == -1 and (pvtC.point.price < math.max(pvtNewestY, pvtOlderY))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
             if smtOK
                 break
-    [smtOK, pvtK0, pvtK1, pvtZ]
+    [smtOK, pvtNewest, pvtOlder, pvtIntermediate]
 
 isDivergenceB() =>
     smtOK = false
-    zg.Pivot pvtK0 = na
-    float pvtK0y   = na
-    zg.Pivot pvtK1 = na
-    float pvtK1y   = na
-    zg.Pivot pvtZ  = na
+    zg.Pivot pvtNewest = na
+    float pvtNewestY   = na
+    zg.Pivot pvtOlder  = na
+    float pvtOlderY    = na
+    zg.Pivot pvtIntermediate = na
     if cfgSMT.useSymbolB and smtPvtArray.size() >= 4
         for i = 2 to smtPvtArray.size() - 1 by 2
-            pvtK0  := smtPvtArray.first()
-            pvtK0y := pvtK0.point.price
-            pvtK1  := smtPvtArray.get(i)
-            pvtK1y := pvtK1.point.price
+            pvtNewest  := smtPvtArray.first()
+            pvtNewestY := pvtNewest.point.price
+            pvtOlder   := smtPvtArray.get(i)
+            pvtOlderY  := pvtOlder.point.price
 
-            pvtZ   := smtPvtArray.get(1)
+            pvtIntermediate := smtPvtArray.get(1)
 
             float pvtB0y = na
             float pvtB1y = na
 
-            if math.sign(pvtK0.dir) != math.sign(pvtK1.dir)
+            if math.sign(pvtNewest.dir) != math.sign(pvtOlder.dir)
                 runtime.error('logic error: pivot directions dont match')
-            else if math.sign(pvtK0.dir) == 1
-                pvtB0y := request.security(cfgSMT.symbolB, timeframe.period, high)[bar_index - pvtK0.point.index]
-                pvtB1y := request.security(cfgSMT.symbolB, timeframe.period, high)[bar_index - pvtK1.point.index]
-            else if math.sign(pvtK0.dir) == -1
-                pvtB0y := request.security(cfgSMT.symbolB, timeframe.period, low)[bar_index - pvtK0.point.index]
-                pvtB1y := request.security(cfgSMT.symbolB, timeframe.period, low)[bar_index - pvtK1.point.index]
+            else if math.sign(pvtNewest.dir) == 1
+                pvtB0y := request.security(cfgSMT.symbolB, timeframe.period, high)[bar_index - pvtNewest.point.index]
+                pvtB1y := request.security(cfgSMT.symbolB, timeframe.period, high)[bar_index - pvtOlder.point.index]
+            else if math.sign(pvtNewest.dir) == -1
+                pvtB0y := request.security(cfgSMT.symbolB, timeframe.period, low)[bar_index - pvtNewest.point.index]
+                pvtB1y := request.security(cfgSMT.symbolB, timeframe.period, low)[bar_index - pvtOlder.point.index]
 
             if not na(pvtB0y) and not na(pvtB1y)
-                if ((pvtK0y >= pvtK1y) and not (pvtB0y >= pvtB1y)) or ((pvtK0y <= pvtK1y) and not (pvtB0y <= pvtB1y))
+                if ((pvtNewestY >= pvtOlderY) and not (pvtB0y >= pvtB1y)) or ((pvtNewestY <= pvtOlderY) and not (pvtB0y <= pvtB1y))
                     log.info('SMT@{0} x {1}:B', 0, i)
                     log.info('size: {0}', i / 2)
                     smtOK := true
                     if (i > 2)
                         for j = 2 to i -1 by 2
                             pvtC = smtPvtArray.get(j)
-                            if math.sign(pvtK0.dir) == 1 and (pvtC.point.price > math.min(pvtK0y, pvtK1y))
+                            if math.sign(pvtNewest.dir) == 1 and (pvtC.point.price > math.min(pvtNewestY, pvtOlderY))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
-                            else if math.sign(pvtK0.dir) == -1 and (pvtC.point.price < math.max(pvtK0y, pvtK1y))
+                            else if math.sign(pvtNewest.dir) == -1 and (pvtC.point.price < math.max(pvtNewestY, pvtOlderY))
                                 log.info('^invalidated at {0}', j)
                                 smtOK := false
                                 break
             if smtOK
                 break
-    [smtOK, pvtK0, pvtK1, pvtZ]
+    [smtOK, pvtNewest, pvtOlder, pvtIntermediate]
 
-[isCurrentSMTA, pvtK0A, pvtK1A, pvtZA] = isDivergenceA()
-[isCurrentSMTB, pvtK0B, pvtK1B, pvtZB] = isDivergenceB()
+[isCurrentSMTA, pvtNewestA, pvtOlderA, pvtIntermediateA] = isDivergenceA()
+[isCurrentSMTB, pvtNewestB, pvtOlderB, pvtIntermediateB] = isDivergenceB()
 
 type smtLinkCalc
     chart.point anchorA
@@ -227,16 +227,16 @@ varip smtRawArrB = array.new<smtLinkCalc>()
 varip smtConfirmedArrA = confirmedArraySwitcher.new(chart = array.new<smtLinkCalc>(), other = array.new<smtLinkCalc>())
 varip smtConfirmedArrB = confirmedArraySwitcher.new(chart = array.new<smtLinkCalc>(), other = array.new<smtLinkCalc>())
 
-calcSMT(isCurrentSMT, pvtK0, pvtK1, pvtZ, symbol, array<smtLinkCalc> smtRawArr) =>
-    if isCurrentSMT and bar_index > (last_bar_index - 2500) and not na(pvtK0) and not na(pvtK1)
-        anchorA = chart.point.new(0, pvtK0.point.index, pvtK0.point.price)
-        anchorB = chart.point.new(0, pvtK1.point.index, pvtK1.point.price)
-        anchorZ = chart.point.new(0, pvtZ.point.index, pvtZ.point.price)
+calcSMT(isCurrentSMT, pvtNewest, pvtOlder, pvtIntermediate, symbol, array<smtLinkCalc> smtRawArr) =>
+    if isCurrentSMT and bar_index > (last_bar_index - 2500) and not na(pvtNewest) and not na(pvtOlder)
+        anchorA = chart.point.new(0, pvtNewest.point.index, pvtNewest.point.price)
+        anchorB = chart.point.new(0, pvtOlder.point.index, pvtOlder.point.price)
+        anchorZ = chart.point.new(0, pvtIntermediate.point.index, pvtIntermediate.point.price)
 
-        smtRawArr.push(smtLinkCalc.new(anchorA, anchorB, anchorZ, symbol, math.sign(pvtK0.dir)))
+        smtRawArr.push(smtLinkCalc.new(anchorA, anchorB, anchorZ, symbol, math.sign(pvtNewest.dir)))
 
-calcSMT(isCurrentSMTA, pvtK0A, pvtK1A, pvtZA, 'A', smtRawArrA)
-calcSMT(isCurrentSMTB, pvtK0B, pvtK1B, pvtZB, 'B', smtRawArrB)
+calcSMT(isCurrentSMTA, pvtNewestA, pvtOlderA, pvtIntermediateA, 'A', smtRawArrA)
+calcSMT(isCurrentSMTB, pvtNewestB, pvtOlderB, pvtIntermediateB, 'B', smtRawArrB)
 
 confirmSMT(array<smtLinkCalc> smtRawArr, confirmedArraySwitcher smtConfirmedArrSw) =>
     if smtRawArr.size() > 0
